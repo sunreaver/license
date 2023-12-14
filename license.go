@@ -3,20 +3,61 @@ package license
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
+	mid "github.com/denisbrodbeck/machineid"
 	"github.com/pkg/errors"
 )
 
-type AppLicenseInfo struct {
-	AppName        string `json:"appname"`         //应用名称
-	AppCompany     string `json:"appcompany"`      //应用发布的公司
-	AppUUID        string `json:"appuuid"`         //此次发布应用的UUID
-	ObjUUID        string `json:"objuuid"`         //目标设备的UUID
-	AuthorizedName string `json:"authorized_name"` //授权名称
-	LimitedTime    string `json:"limited_time"`    //到期日期
+// 开启检测.
+// pemPubkey: 公钥内容
+// appid: 应用id，注意应用id是生成machineid时传入的id
+func Load(pemPubkey, appid string) {
+	licensefile := filepath.Join(getExecPath(), "license")
+	f, err := os.OpenFile(licensefile, os.O_RDONLY, 0666)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	defer f.Close()
+	appinfo, err := DecodeFromBase64ToAppinfo(f, strings.NewReader(pemPubkey))
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	check := func() {
+		err := appinfo.IsLimited()
+		if err != nil {
+			fmt.Println(err.Error())
+			os.Exit(1)
+		}
+		if appinfo.AppUUID != appid {
+			fmt.Println("app id is not match")
+			os.Exit(1)
+		}
+		machineid, err := mid.ProtectedID(appid)
+		if err != nil {
+			fmt.Println(err.Error())
+			os.Exit(1)
+		}
+		if machineid != appinfo.ObjUUID {
+			fmt.Println("machine id is not match")
+			os.Exit(1)
+		}
+	}
+	go func() {
+		for {
+			check()
+			time.Sleep(time.Second)
+		}
+	}()
+	return
 }
 
 // Encode2Base64ByAppinfo 将appinfo内容，通过rsa私钥加密后，返回base64编码后的内容
@@ -104,28 +145,4 @@ func DecodeFromBase64(base64Content, rsaPublicKey io.Reader) ([]byte, error) {
 
 	}
 	return out.Bytes(), nil
-}
-
-type trunck struct {
-	Size int    `json:"s"`
-	Data string `json:"d"`
-}
-
-func (t trunck) Parse() ([]byte, error) {
-	return hex.DecodeString(t.Data)
-}
-
-type truncks []trunck
-
-func (t *truncks) Add(data []byte) {
-	*t = append(*t, trunck{Size: len(data), Data: hex.EncodeToString(data)})
-}
-
-func (t truncks) MarshalToString() string {
-	o, _ := json.Marshal(t)
-	return string(o)
-}
-
-func (t *truncks) UnmarshalFromBytes(s []byte) error {
-	return json.Unmarshal(s, t)
 }
