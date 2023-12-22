@@ -19,6 +19,11 @@ import (
 // pemPubkey: 公钥内容
 // appid: 应用id，注意应用id是生成machineid时传入的id
 func Load(pemPubkey, appid string) {
+	LoadWithMachineID(pemPubkey, appid, true)
+	return
+}
+
+func LoadWithMachineID(pemPubkey, appid string, needcheckmahine bool) {
 	licensefile := filepath.Join(getExecPath(), "license")
 	f, err := os.OpenFile(licensefile, os.O_RDONLY, 0666)
 	if err != nil {
@@ -41,14 +46,16 @@ func Load(pemPubkey, appid string) {
 			fmt.Println("app id is not match")
 			os.Exit(1)
 		}
-		machineid, err := mid.ProtectedID(appid)
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
-		if machineid != appinfo.ObjUUID {
-			fmt.Println("machine id is not match")
-			os.Exit(1)
+		if needcheckmahine {
+			machineid, err := mid.ProtectedID(appid)
+			if err != nil {
+				fmt.Println(err.Error())
+				os.Exit(1)
+			}
+			if machineid != appinfo.ObjUUID {
+				fmt.Println("machine id is not match")
+				os.Exit(1)
+			}
 		}
 	}
 	go func() {
