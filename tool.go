@@ -26,6 +26,7 @@ type AppLicenseInfo struct {
 	ObjUUID        string `json:"objuuid"`         //目标设备的UUID
 	AuthorizedName string `json:"authorized_name"` //授权名称
 	LimitedTime    string `json:"limited_time"`    //到期日期
+	StartedTime    string `json:"started_time"`    //起始日期
 }
 
 func (ali AppLicenseInfo) IsLimited() error {
@@ -34,7 +35,11 @@ func (ali AppLicenseInfo) IsLimited() error {
 	if err != nil {
 		return err
 	}
-	if time.Now().After(t) {
+	start, err := time.ParseInLocation("2006-01-02 15:04:05", ali.StartedTime, time.Local)
+	if err != nil {
+		return err
+	}
+	if time.Now().Before(start) || time.Now().After(t) {
 		return ErrLicenseLimited
 	}
 	return nil
